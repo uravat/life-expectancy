@@ -1,5 +1,13 @@
 ---
 title: "Life Expectancy for Political Candidates"
 format: html
+execute: 
+  echo: false
 ---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(primer.data)
+```
 
