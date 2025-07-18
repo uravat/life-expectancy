@@ -9,5 +9,55 @@ execute:
 #| message: false
 library(tidyverse)
 library(primer.data)
+library(tidymodels)
+library(broom)
+library(easystats) 
+library(marginaleffects)
 ```
+
+```{r}
+#| eval: false
+governors
+```
+
+```{r}
+##| eval: false
+#install.packages("gt")
+library(gt)
+x <- governors |> 
+  filter(year > 1945) |> 
+  select(last_name, year, state, sex, lived_after, election_age, region)
+
+#x |> 
+#  head() |> 
+#  gt()
+```
+
+```{r}
+#| cache: true
+fit_years <- linear_reg(engine = "lm") |> 
+  fit(lived_after ~ election_age*sex, data = x)
+#fit_years
+```
+
+```{r}
+# Assuming you already have predictions in `preds` from plot_predictions()
+preds <- plot_predictions(fit_years, 
+                 by = c("election_age", "sex"), draw = FALSE)
+
+ggplot(preds, aes(x = election_age, y = estimate, color = sex, fill = sex)) +
+  geom_line(linewidth = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2, color = NA) +
+  labs(
+    title = "Relationship Between Election Age and Longevity After Office",
+    subtitle = "Male candidates show a steeper decline in longevity with increasing election age",
+    caption = "Data Source: Longevity Returns to Political Office (Barfort et al., 2021)",
+    x = "Age at Election (years)",
+    y = "Predicted Years Lived After Election"
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_color_manual(values = c("Female" = "#D95F02", "Male" = "#1B9E77")) +
+  scale_fill_manual(values = c("Female" = "#D95F02", "Male" = "#1B9E77"))
+```
+The relationship between holding political office and longetivity can be a crucial consideration for those intending to run for office.  Using data on U.S. gubernatorial candidates for governer since 1945, we seek to predict longetivity for political candidates based on their age at assuming office. Because our data includes only candidates for governor, our estimated model might not work well when applied to candidates for other positions, like mayor. We model longevity after political office, measured in years lived after the election, as a linear function of sex, election age, and their interaction. One quantity of interest is the difference in the effect of election age on longevity after office between male and female candidates; for males, each additional year of election age is associated with approximately 0.86 fewer years lived after election, with a 95% confidence interval ranging from 0.07 to 1.5 years fewer.
 

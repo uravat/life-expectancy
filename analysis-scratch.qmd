@@ -1,0 +1,258 @@
+---
+title: "Life Expectancy for Political Candidates"
+format: html
+execute: 
+  echo: false
+---
+
+
+```{r}
+#| message: false
+library(tidyverse)
+library(primer.data)
+library(tidymodels)
+library(broom)
+library(easystats) 
+library(marginaleffects)
+```
+
+```{r}
+#| eval: false
+governors
+```
+
+```{r}
+##| eval: false
+#install.packages("gt")
+library(gt)
+x <- governors |> 
+  filter(year > 1945) |> 
+  select(last_name, year, state, sex, lived_after, election_age, region)
+
+#x |> 
+#  head() |> 
+#  gt()
+```
+
+
+
+
+## The mathematical and statistical model 
+
+A statistical model consists of two parts: the probability family and the link function. The probability family is the probability distribution which generates the randomness in our data. The link function is the mathematical formula which links our data to the unknown parameters in the probability distribution.
+
+Since $Y$(aged lived) is continuous, we use the probability model  $Y \sim N(\mu, \sigma^2)$
+
+The link function, the basic mathematical structure of the model, is (mostly) determined by the type of outcome variable.
+
+For a continuous outcome variable, we use a linear model for the link function: So we use 
+
+$\mu = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \cdots + \beta_n X_n$
+
+Putting this together,  the mathematical structure of the model, with $Y$ as the dependent variable and $X_1, X_2$ and so on as the independent variables. 
+$$Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \cdots + \beta_n X_n + \epsilon$$
+
+with $\epsilon \sim \mathcal{N}(0, \sigma^2)$.
+
+
+## The data generating mechanism 
+
+## 1. lived_after ~ sex 
+```{r}
+linear_reg(engine = "lm") |>
+  fit(lived_after ~ sex, data = x)|>
+    tidy(conf.int = TRUE)
+```
+
+## 1. lived_after ~ region 
+```{r}
+linear_reg(engine = "lm") |>
+  fit(lived_after ~ region, data = x)|>
+    tidy(conf.int = TRUE)
+```
+
+CI includes 0, so region should be excluded
+
+## 1. lived_after ~ sex + election_age
+```{r}
+linear_reg(engine = "lm") |>
+  fit(lived_after ~ sex + election_age, data = x)|>
+    tidy(conf.int = TRUE)
+```
+
+The data generating mechanism is 
+$$
+\widehat{Y} = 65.96 + 6.21 \cdot \text{sex}_{\text{Male}} - 0.85 \cdot \text{age}
+$$
+
+
+The more variables we add, the more difficult it is to interpret the meaning of any particular coefficient. But interpretation also becomes less important. We don’t really care about coefficients. We care about using our model to estimate quantities of interest.
+
+In this case, the coefficient of sexMale is 50% lower than before, presumably because female candidates tend to be older and, by including election_age, we have adjusted for that difference.
+
+## 4. election_age*sex
+
+
+```{r}
+#| cache: true
+fit_years <- linear_reg(engine = "lm") |> 
+  fit(lived_after ~ election_age*sex, data = x)
+fit_years
+```
+
+
+```{r}
+##| eval: false
+#| message: false
+library(easystats) 
+check_predictions(extract_fit_engine(fit_years))
+fit_years
+```
+
+
+```{r}
+##| eval: false
+tidy(fit_years, conf.int = TRUE) # for AI to create the table
+#help you make a nice looking table from the tibble which is returned by tidy(). You don’t have to include all the variables which tidy() produces. We often just show the estimate and the confidence intervals. Give title, subtitle and source for data in caption
+```
+
+
+```{r}
+# create quarto code for this model, including our variable names and estimates for all the coefficients. Because this is a fitted model, the dependent variable will have a “hat” and the formula will not include an error term.
+# Prepare table data
+model_table <- tidy(fit_years, conf.int = TRUE) %>%
+  select(term, estimate, conf.low, conf.high) %>%
+  mutate(
+    Estimate = round(estimate, 2),
+    `95% CI` = paste0("[", round(conf.low, 2), ", ", round(conf.high, 2), "]")
+  ) %>%
+  select(term, Estimate, `95% CI`)
+
+# Create gt table
+model_table %>%
+  gt() %>%
+  cols_label(
+    term = "Term"
+  ) %>%
+  tab_header(
+    title = "Regression Estimates Predicting Lived After",
+    subtitle = "Linear model with interaction between election age and sex"
+  ) %>%
+  tab_source_note(
+    source_note = "Source: Longevity Returns to Political Office by Barfort, Klemmensen, and Larsen"
+  )
+```
+
+```{r}
+library(knitr)
+
+tidy(fit_years, conf.int = TRUE) |>
+  select(term, estimate, conf.low, conf.high) |>
+  kable(digits = 2, col.names = c("Variable", "Estimate", "Lower CI", "Upper CI"))
+```
+
+1. 19.32 years is the model's estimated number of years lived after election for a female candidate elected at age 0.
+
+2. For female candidates (since sexMale = 0),
+Each additional year of age at election is associated with a decrease of 0.0563 years in the predicted years lived after election.
+The effect is small (−0.0563 years is about 20 days).
+
+The confidence interval includes zero (−0.785 to 0.672), which suggests this effect is not statistically significant in your model.
+
+3. For male candidates, compared to female candidates,The predicted years lived after election are 53.30 years higher when election age is zero.
+Being male is associated with an estimated 53.30 additional years of longevity after election compared to being female, when election age is zero."
+
+3. The coefficient −0.80 is for the interaction term: election_age:sexMale
+For male candidates, Each additional year of age at election is associated with 0.80 fewer years lived after election compared to female candidates.
+
+For females, the effect of election age is only −0.0563 years per year.
+
+For males, the combined effect is:
+−0.0563−0.80=−0.8563
+−0.0563−0.80=−0.8563
+
+→ Each additional year of election age reduces predicted longevity after election by approximately 0.86 years for males.
+
+"The negative interaction coefficient suggests that the effect of election age on longevity after office is more strongly negative for male candidates than for female candidates."
+
+The confidence interval [−1.5, −0.07] for the coefficient of election_age:sexMale means:
+
+    We are 95% confident that the true effect of election age on longevity for male candidates (relative to females) is a decrease between 0.07 and 1.5 years of longevity per additional year of election age.
+
+    Because the entire interval is below zero, this suggests the interaction effect is statistically significant at the 5% level.
+
+In plain terms:
+
+    "For male candidates, each additional year of election age is associated with a statistically significant reduction in years lived after election, estimated to be between 0.07 and 1.5 years."
+
+
+
+
+$$
+\widehat{\text{lived after}} = 19.30 - 0.06 \cdot \text{election age} + 53.30 \cdot \text{sex}_{\text{Male}} - 0.80 \cdot (\text{election age} \times \text{sex}_{\text{Male}})
+$$
+
+$$
+\hat{Y}_i = 40 - 0.5 \cdot \text{age}_i - 2.3 \cdot \text{won}_i + 0.04 \cdot \text{year}_i
+$$
+
+
+```{r}
+#| message: false
+library(marginaleffects)
+```
+
+```{r}
+plot_predictions(fit_years, 
+                 by = "sex")
+```
+
+```{r}
+plot_predictions(fit_years,
+                condition = c("election_age"))
+
+```
+
+
+```{r}
+plot_predictions(fit_years, 
+                 by = c("election_age", "sex"))
+```
+
+
+```{r}
+# Assuming you already have predictions in `preds` from plot_predictions()
+preds <- plot_predictions(fit_years, 
+                 by = c("election_age", "sex"), draw = FALSE)
+
+ggplot(preds, aes(x = election_age, y = estimate, color = sex, fill = sex)) +
+  geom_line(linewidth = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2, color = NA) +
+  labs(
+    title = "Relationship Between Election Age and Longevity After Office",
+    subtitle = "Male candidates show a steeper decline in longevity with increasing election age",
+    caption = "Data Source: Longevity Returns to Political Office (Barfort et al., 2021)",
+    x = "Age at Election (years)",
+    y = "Predicted Years Lived After Election"
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_color_manual(values = c("Female" = "#D95F02", "Male" = "#1B9E77")) +
+  scale_fill_manual(values = c("Female" = "#D95F02", "Male" = "#1B9E77"))
+```
+
+
+```{r}
+predictions <- x %>%
+  mutate(.pred = predict(fit_years, new_data = x)$.pred)
+
+ggplot(predictions, aes(x = election_age, y = .pred, color = sex)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(
+    title = "Predicted Years Lived After Election by Age and Sex",
+    subtitle = "Smoothed predictions from the fitted model",
+    x = "Age at Election",
+    y = "Predicted Years Lived",
+    color = "Sex"
+  )
+```
